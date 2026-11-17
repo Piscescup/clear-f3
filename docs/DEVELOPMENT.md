@@ -150,7 +150,9 @@ contents.addLine("Additional information");
 
 Fabric 所有版本和 NeoForge 都读取这个共用目录。各个旧版的 `runDatagen` 仍可用于兼容性验证，但输出到自己的 `build/generated/datagen`，不会覆盖共用结果或重复打包语言文件。语言资源由 Fabric 数据生成器维护，NeoForge 不需要加载 Fabric 的 Provider。
 
-各版本产物位于 `fabric/versions/<版本>/build/libs`。安装包按 `clean-f3-v<mod_version>-mc-<mc_version>-<loader>-<loader_version>.jar` 命名。Fabric 的最后一段使用 Fabric API 版本，例如 `clean-f3-v1.0.0-mc-1.20.1-fabric-0.92.6+1.20.1.jar`；NeoForge 使用 NeoForge 版本，例如 `clean-f3-v1.0.0-mc-26.3-neoforge-26.3.0.26-beta.jar`。根目录运行 `.\gradlew.bat buildAndGather` 后，可安装的 Fabric 和 NeoForge JAR 分别汇总到根目录的 `build/releases/fabric/` 和 `build/releases/neoforge/`。单独运行 `:fabric:build` 或 `:neoforge:build` 也会更新对应的汇总目录。源码包与开发包不参与汇总；`common` 的产物用于开发，安装时使用对应版本的主 JAR。
+Fabric 各版本产物位于 `fabric/versions/<版本>/build/libs`。安装包按 `clean-f3-v<mod_version>-fabric-<fabric_api_version>mc.jar` 命名，例如 `clean-f3-v1.0.0-fabric-0.92.6+1.20.1mc.jar`。NeoForge 安装包按 `clean-f3-v<mod_version>-mc-<mc_version>-neoforge-<neoforge_version>.jar` 命名，例如 `clean-f3-v1.0.0-mc-26.3-neoforge-26.3.0.26-beta.jar`。
+
+根目录运行 `.\gradlew.bat buildAndGather` 后，可安装的 Fabric 和 NeoForge JAR 分别汇总到根目录的 `build/releases/fabric/` 和 `build/releases/neoforge/`。单独运行 `:fabric:build` 或 `:neoforge:build` 也会更新对应的汇总目录。源码包与开发包不参与汇总；`common` 的产物用于开发，安装时使用对应版本的主 JAR。
 
 Fabric 运行目录为 `fabric/run/<版本>`，NeoForge 运行目录为 `neoforge/run`。进入游戏后按 F3 查看界面；具有调试条目菜单的游戏版本可通过原版选项选择条目。
 

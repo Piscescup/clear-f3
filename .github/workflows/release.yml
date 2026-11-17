@@ -1,0 +1,86 @@
+name: Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag, matching gradle.properties (for example v1.0.0)'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release tag and notes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    outputs:
+      commit: ${{ steps.checkout.outputs.commit }}
+      tag: ${{ steps.release.outputs.tag }}
+    steps:
+      - name: Check out the release tag
+        id: checkout
+        uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ github.event.release.tag_name || inputs.tag }}
+          persist-credentials: false
+      - name: Validate version and changelog
+        id: release
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
+        run: python3 .github/scripts/ci.py release-info --tag "$RELEASE_TAG"
+      - name: Check that the GitHub release exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: gh release view "$RELEASE_TAG" --json tagName --jq .tagName
+
+  build:
+    name: Build release artifacts
+    needs: validate
+    uses: ./.github/workflows/build.yml
+    with:
+      source_ref: ${{ needs.validate.outputs.commit }}
+
+  publish:
+    name: Upload GitHub release assets
+    needs: [validate, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out the validated release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - name: Download the verified bundle
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: build/releases
+          merge-multiple: true
+      - name: Prepare assets and fallback notes
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          python3 .github/scripts/ci.py release-info --tag "$RELEASE_TAG"
+          python3 .github/scripts/ci.py release-assets
+      - name: Upload JARs and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+        run: |
+          gh release upload "$RELEASE_TAG" build/release-assets/*.jar build/release-assets/SHA256SUMS --clobber
+          if [ -z "$(gh release view "$RELEASE_TAG" --json body --jq '.body // ""')" ]; then
+            gh release edit "$RELEASE_TAG" --notes-file build/release-notes.md
+          fi
