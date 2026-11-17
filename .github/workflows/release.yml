@@ -9,6 +9,15 @@ on:
         description: 'Existing release tag, matching gradle.properties (for example v1.0.0)'
         type: string
         required: true
+      platform:
+        description: 'Where to upload the selected release'
+        type: choice
+        default: github
+        options: [github, both, curseforge, modrinth]
+      targets:
+        description: 'CurseForge/Modrinth targets, e.g. fabric:1.20.1,neoforge:26.3 (empty = all)'
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -25,6 +34,8 @@ jobs:
     outputs:
       commit: ${{ steps.checkout.outputs.commit }}
       tag: ${{ steps.release.outputs.tag }}
+      channel: ${{ steps.metadata.outputs.channel }}
+      publish_matrix: ${{ steps.metadata.outputs.matrix }}
     steps:
       - name: Check out the release tag
         id: checkout
@@ -37,11 +48,24 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event.release.tag_name || inputs.tag }}
         run: python3 .github/scripts/ci.py release-info --tag "$RELEASE_TAG"
-      - name: Check that the GitHub release exists
+      - name: Read GitHub release status and plan platform uploads
+        id: metadata
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
-        run: gh release view "$RELEASE_TAG" --json tagName --jq .tagName
+          PLATFORM: ${{ github.event_name == 'release' && 'both' || inputs.platform || 'github' }}
+          TARGETS: ${{ inputs.targets }}
+        run: |
+          release=$(gh release view "$RELEASE_TAG" --json isDraft,isPrerelease)
+          if [ "$PLATFORM" = github ]; then
+            exit 0
+          fi
+          if [ "$(jq -r .isDraft <<< "$release")" = true ]; then
+            echo '::error::Publish the GitHub release before uploading to CurseForge or Modrinth.'
+            exit 1
+          fi
+          jq -r 'if .isPrerelease then "channel=beta" else "channel=release" end' <<< "$release" >> "$GITHUB_OUTPUT"
+          python3 .github/scripts/ci.py publish-matrix --platform "$PLATFORM" --targets "$TARGETS"
 
   build:
     name: Build release artifacts
@@ -49,9 +73,11 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       source_ref: ${{ needs.validate.outputs.commit }}
+      targets: ${{ inputs.platform != 'github' && inputs.targets || '' }}
 
   publish:
     name: Upload GitHub release assets
+    if: ${{ github.event_name == 'release' || !inputs.platform || inputs.platform == 'github' }}
     needs: [validate, build]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -84,3 +110,62 @@ jobs:
           if [ -z "$(gh release view "$RELEASE_TAG" --json body --jq '.body // ""')" ]; then
             gh release edit "$RELEASE_TAG" --notes-file build/release-notes.md
           fi
+
+  publish-platforms:
+    name: ${{ matrix.platform }} / ${{ matrix.loader }} / ${{ matrix.minecraft }}
+    needs: [validate, build, publish]
+    if: ${{ !cancelled() && !failure() && needs.validate.outputs.publish_matrix != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.validate.outputs.publish_matrix) }}
+    steps:
+      - name: Check platform configuration
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          PROJECT_ID: ${{ vars[format('{0}_PROJECT_ID', matrix.platform)] }}
+          UPLOAD_TOKEN: ${{ secrets[format('{0}_TOKEN', matrix.platform)] }}
+        run: |
+          if [ -z "$PROJECT_ID" ] || [ -z "$UPLOAD_TOKEN" ]; then
+            echo "::error::Set ${PLATFORM^^}_PROJECT_ID in Actions Variables and ${PLATFORM^^}_TOKEN in Actions Secrets."
+            exit 1
+          fi
+      - name: Check out the validated release commit
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+          persist-credentials: false
+      - name: Download the verified bundle
+        uses: actions/download-artifact@v8
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          path: build/releases
+          merge-multiple: true
+      - name: Verify the bundle and prepare release notes
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          RELEASE_JAR: ${{ matrix.file }}
+        run: |
+          (cd build/releases && sha256sum --check --strict SHA256SUMS)
+          test -s "$RELEASE_JAR"
+          python3 .github/scripts/ci.py release-info --tag "$RELEASE_TAG"
+      - name: Upload the installable JAR
+        uses: Kira-NT/mc-publish@52307b03863581dec6b652b83e597aec02ebb075 # v3.3.1
+        with:
+          curseforge-id: ${{ matrix.platform == 'curseforge' && vars.CURSEFORGE_PROJECT_ID || '' }}
+          curseforge-token: ${{ matrix.platform == 'curseforge' && secrets.CURSEFORGE_TOKEN || '' }}
+          modrinth-id: ${{ matrix.platform == 'modrinth' && vars.MODRINTH_PROJECT_ID || '' }}
+          modrinth-token: ${{ matrix.platform == 'modrinth' && secrets.MODRINTH_TOKEN || '' }}
+          modrinth-featured: false
+          modrinth-unfeature-mode: none
+          files: ${{ matrix.file }}
+          name: Clear F3 ${{ needs.validate.outputs.tag }} for Minecraft ${{ matrix.minecraft }} (${{ matrix.loader }})
+          version: ${{ matrix.version }}
+          version-type: ${{ needs.validate.outputs.channel }}
+          changelog-file: build/release-notes.md
+          loaders: ${{ matrix.loader }}
+          game-versions: ${{ matrix.minecraft }}
+          environment: client
+          dependencies: ${{ matrix.loader == 'fabric' && 'fabric-api(required){modrinth:P7dR8mSH}{curseforge:306612}' || '' }}
