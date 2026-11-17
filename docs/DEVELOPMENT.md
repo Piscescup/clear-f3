@@ -157,3 +157,12 @@ Fabric 各版本产物位于 `fabric/versions/<版本>/build/libs`。安装包�
 Fabric 运行目录为 `fabric/run/<版本>`，NeoForge 运行目录为 `neoforge/run`。进入游戏后按 F3 查看界面；具有调试条目菜单的游戏版本可通过原版选项选择条目。
 
 新增构建版本时，将节点加入 `fabric/versions.json`，添加该节点的 `gradle.properties` 和相邻版本映射文件，并在公共源码中补充必要的条件编译。版本数字示例：1.20.1 为 `12001`，1.21.11 为 `12111`，26.3 为 `260300`。随后单独构建该节点，并核对 Mixin 注入点及游戏内表现。
+
+## 发布
+
+1. 在 GitHub 仓库的 **Settings → Secrets and variables → Actions** 添加两个仓库 Secret，名称为 `CURSEFORGE_TOKEN` 和 `MODRINTH_TOKEN`。CurseForge 使用作者后台生成的上传令牌，Modrinth 令牌需要 **Create versions** 权限。
+2. 在同一页的 **Variables** 添加 `CURSEFORGE_PROJECT_ID` 和 `MODRINTH_PROJECT_ID`，分别填写 CurseForge 数字项目 ID 和 Modrinth 项目 ID。待审项目也使用实际项目 ID。
+3. 将发布工作流合入默认分支。确认 `gradle.properties` 的 `version` 和 `CHANGELOG.md` 的版本标题一致，然后在 GitHub **Releases** 创建指向该提交的标签，例如 `v1.0.0`，并点击 **Publish release**。
+4. 在 **Actions → Release** 查看进度。构建完成后，工作流会上传 GitHub 附件，再把每个安装包上传到 CurseForge 和 Modrinth。GitHub 预发行版在两个平台上使用 `beta` 类型。
+
+上传任务按平台、加载器和 Minecraft 版本运行。报告上传失败时，先查对应平台是否已收到文件。也可以在 **Actions → Release → Run workflow** 中选择已有的 `tag` 和目标 `platform`，用 `targets` 指定需要补发的包，例如 `fabric:1.20.1,neoforge:26.3`。`targets` 留空会上传该平台的全部构建。手动选择 `github` 会单独更新 GitHub 的全部 Release 附件。

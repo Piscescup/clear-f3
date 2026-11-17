@@ -155,6 +155,18 @@ def release_assets(root):
     return destinations
 
 
+def publish_matrix(root, platform, selection=""):
+    version = component(properties(root / "gradle.properties")["version"])
+    platforms = ("curseforge", "modrinth") if platform == "both" else (platform,)
+    return {"include": [
+        {"platform": destination, "loader": target["loader"], "minecraft": target["minecraft"],
+         "file": f"build/releases/{target['loader']}/{target['filename']}",
+         "version": f"{version}+mc{target['minecraft']}-{target['loader']}"}
+        for target in targets(root, selection)
+        for destination in platforms
+    ]}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -165,6 +177,9 @@ def main():
     collect_parser.add_argument("--minecraft", required=True)
     commands.add_parser("release-info").add_argument("--tag", required=True)
     commands.add_parser("release-assets")
+    publish_parser = commands.add_parser("publish-matrix")
+    publish_parser.add_argument("--platform", required=True, choices=("both", "curseforge", "modrinth"))
+    publish_parser.add_argument("--targets", default="")
     args = parser.parse_args()
     try:
         if args.command == "matrix":
@@ -181,8 +196,10 @@ def main():
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_text(notes, encoding="utf-8")
             output("tag", args.tag)
-        else:
+        elif args.command == "release-assets":
             release_assets(ROOT)
+        else:
+            output("matrix", json.dumps(publish_matrix(ROOT, args.platform, args.targets), separators=(",", ":")))
     except (KeyError, OSError, ValueError) as error:
         parser.error(str(error))
 

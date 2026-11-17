@@ -130,6 +130,27 @@ class CiTests(unittest.TestCase):
             self.assertNotIn("/", filename)
             self.assertEqual(digest, hashlib.sha256((directory / filename).read_bytes()).hexdigest())
 
+    def test_publish_matrix_pairs_each_installable_jar_with_both_platforms(self):
+        self.downloaded()
+        paths = ci.gather(self.root)
+        matrix = ci.publish_matrix(self.root, "both")["include"]
+        self.assertEqual(len(matrix), 6)
+        self.assertEqual({self.root / job["file"] for job in matrix}, set(paths))
+        for path in paths:
+            jobs = [job for job in matrix if self.root / job["file"] == path]
+            self.assertEqual({job["platform"] for job in jobs}, {"curseforge", "modrinth"})
+            self.assertEqual(len({job["version"] for job in jobs}), 1)
+        self.assertEqual(len({job["version"] for job in matrix}), len(paths))
+
+    def test_publish_matrix_limits_a_manual_upload_to_the_selected_platform_and_target(self):
+        self.assertEqual(ci.publish_matrix(self.root, "modrinth", "fabric:26.3")["include"], [{
+            "platform": "modrinth",
+            "loader": "fabric",
+            "minecraft": "26.3",
+            "file": "build/releases/fabric/clean-f3-v1.2.3-fabric-0.166.2+26.3mc.jar",
+            "version": "1.2.3+mc26.3-fabric",
+        }])
+
 
 if __name__ == "__main__":
     unittest.main()
