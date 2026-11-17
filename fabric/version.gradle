@@ -1,4 +1,5 @@
 import com.replaymod.gradle.preprocess.PreprocessTask
+import org.gradle.jvm.tasks.Jar
 
 def targetVersion = project.minecraft_version.toString()
 def parts = targetVersion.tokenize('.').collect { it as int }
@@ -11,9 +12,9 @@ apply plugin: unobfuscated ? 'net.fabricmc.fabric-loom' : 'net.fabricmc.fabric-l
 apply plugin: 'com.replaymod.preprocess'
 
 version = "${rootProject.version}+mc${targetVersion}"
-base.archivesName = "clean-f3-v${rootProject.version}-mc-${targetVersion}-fabric-${fabric_api_version}"
+base.archivesName = "clean-f3-v${rootProject.version}-fabric-${fabric_api_version}mc"
 
-// Keep the metadata version independent from the complete distribution filename.
+// Use the Jar type shared by the Java and Loom remapping tasks.
 tasks.withType(Jar).configureEach {
     archiveVersion = ''
 }

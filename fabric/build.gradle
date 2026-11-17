@@ -1,5 +1,6 @@
 import groovy.json.JsonSlurper
 import com.replaymod.gradle.preprocess.RootPreprocessPlugin
+import org.gradle.jvm.tasks.Jar
 
 buildscript {
     repositories {
@@ -44,9 +45,12 @@ tasks.register('buildAndGather', Sync) {
     group = 'build'
     description = 'Build every Fabric version and gather installable jars.'
     dependsOn versionPaths.collect { "${it}:build" }
-    from(versionPaths.collect { project(it).layout.buildDirectory.dir('libs') }) {
-        include 'clean-f3-v*-mc-*-fabric-*.jar'
-        exclude '*-sources.jar', '*-dev.jar'
+    from {
+        versionPaths.collect { path ->
+            def versionTasks = project(path).tasks
+            def archiveTask = versionTasks.names.contains('remapJar') ? 'remapJar' : 'jar'
+            versionTasks.named(archiveTask, Jar).flatMap { it.archiveFile }
+        }
     }
     into rootProject.layout.buildDirectory.dir('releases/fabric')
     duplicatesStrategy = DuplicatesStrategy.FAIL
