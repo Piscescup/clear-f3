@@ -1,0 +1,14 @@
+{
+	"required": true,
+	"package": "io.github.piscescup.mc.clear_f3.mixin",
+	"compatibilityLevel": "${java_compatibility}",
+	"client": [
+		"${debug_overlay_mixin}"
+	],
+	"injectors": {
+		"defaultRequire": 1
+	},
+	"overwrites": {
+		"requireAnnotations": true
+	}
+}

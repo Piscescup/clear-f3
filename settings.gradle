@@ -1,0 +1,36 @@
+import groovy.json.JsonSlurper
+
+pluginManagement {
+	repositories {
+		maven {
+			name = 'Fabric'
+			url = 'https://maven.fabricmc.net/'
+		}
+		maven {
+			name = 'NeoForged'
+			url = 'https://maven.neoforged.net/releases/'
+		}
+		mavenCentral()
+		gradlePluginPortal()
+	}
+	resolutionStrategy {
+		eachPlugin {
+			if (requested.version != null && requested.id.id in ['net.fabricmc.fabric-loom', 'net.fabricmc.fabric-loom-remap']) {
+				useModule("net.fabricmc:fabric-loom:${requested.version}")
+			}
+		}
+	}
+}
+
+// Should match your modid
+rootProject.name = 'clear-f3'
+
+include 'common', 'fabric', 'neoforge'
+
+def fabricVersions = new JsonSlurper().parse(file('fabric/versions.json')).versions
+fabricVersions.each { String minecraftVersion ->
+    include ":fabric:${minecraftVersion}"
+    def versionProject = project(":fabric:${minecraftVersion}")
+    versionProject.projectDir = file("fabric/versions/${minecraftVersion}")
+    versionProject.buildFileName = '../../version.gradle'
+}

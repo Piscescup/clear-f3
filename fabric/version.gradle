@@ -1,0 +1,123 @@
+import com.replaymod.gradle.preprocess.PreprocessTask
+
+def targetVersion = project.minecraft_version.toString()
+def parts = targetVersion.tokenize('.').collect { it as int }
+def mc = parts[0] * 10000 + parts[1] * 100 + (parts.size() > 2 ? parts[2] : 0)
+def javaRelease = project.java_version as int
+def unobfuscated = mc >= 260100
+def coreVersion = targetVersion == '26.3'
+
+apply plugin: unobfuscated ? 'net.fabricmc.fabric-loom' : 'net.fabricmc.fabric-loom-remap'
+apply plugin: 'com.replaymod.preprocess'
+
+version = "${rootProject.version}+mc${targetVersion}"
+base.archivesName = "clean-f3-v${rootProject.version}-mc-${targetVersion}-fabric-${fabric_api_version}"
+
+// Keep the metadata version independent from the complete distribution filename.
+tasks.withType(Jar).configureEach {
+    archiveVersion = ''
+}
+
+java {
+    // Java 21 can also produce the Java 17 bytecode required by older games.
+    toolchain.languageVersion = JavaLanguageVersion.of(Math.max(javaRelease, 21))
+}
+tasks.withType(JavaCompile).configureEach {
+    options.release = javaRelease
+}
+
+def sharedJava = rootProject.file('common/src/main/java')
+def loaderJava = project(':fabric').file('src/main/java')
+def sharedResources = rootProject.file('common/src/main/resources')
+def generatedResources = rootProject.file('common/src/generated/resources')
+def loaderResources = project(':fabric').file('src/main/resources')
+
+if (coreVersion) {
+    sourceSets.main.java.setSrcDirs([sharedJava, loaderJava])
+    sourceSets.main.resources.setSrcDirs([sharedResources, generatedResources, loaderResources])
+}
+
+sourceSets.main.resources.exclude '.cache/**'
+
+tasks.withType(PreprocessTask).configureEach {
+    notCompatibleWithConfigurationCache('The preprocessor retains a Gradle project reference.')
+}
+
+tasks.named('sourcesJar') {
+    dependsOn tasks.matching { it.name == 'preprocessResources' }
+}
+
+repositories {
+    maven {
+        url = 'https://api.modrinth.com/maven'
+        content { includeGroup 'maven.modrinth' }
+    }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${targetVersion}"
+    if (!unobfuscated) {
+        mappings loom.officialMojangMappings()
+        modImplementation "net.fabricmc:fabric-loader:${loader_version}"
+        modImplementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+        modImplementation("maven.modrinth:modmenu:${modmenu_version}") { transitive = false }
+        include(modImplementation("io.github.llamalad7:mixinextras-fabric:${mixinextras_version}"))
+        annotationProcessor "io.github.llamalad7:mixinextras-fabric:${mixinextras_version}"
+    } else {
+        implementation "net.fabricmc:fabric-loader:${loader_version}"
+        implementation "net.fabricmc.fabric-api:fabric-api:${fabric_api_version}"
+        implementation("maven.modrinth:modmenu:${modmenu_version}") { transitive = false }
+    }
+}
+
+loom {
+    if (mc >= 260300) {
+        accessWidenerPath = rootProject.file('common/src/main/resources/clear_f3.accesswidener')
+    }
+    runs.configureEach {
+        ideConfigGenerated = true
+        runDir "../../run/${targetVersion}"
+    }
+}
+
+fabricApi {
+    configureDataGeneration {
+        client = true
+        modId = 'clear_f3'
+        // Only the primary version writes the shared, checked-in resources.
+        outputDirectory = coreVersion ? generatedResources : layout.buildDirectory.dir('generated/datagen').get().asFile
+        addToResources = false
+    }
+}
+
+def metadata = [version: project.version.toString(), loader_version: loader_version,
+                minecraft_dependency: minecraft_dependency, java_version: javaRelease.toString(),
+                java_compatibility: "JAVA_${javaRelease}",
+                debug_overlay_mixin: mc < 12109 ? 'client.LegacyDebugScreenOverlayMixin' : 'client.DebugScreenOverlayMixin']
+processResources {
+    inputs.properties metadata
+    inputs.property 'mc', mc
+    if (mc < 260300) {
+        exclude 'clear_f3.accesswidener'
+    }
+    filesMatching('fabric.mod.json') {
+        expand metadata
+    }
+    filesMatching('clear_f3.mixins.json') {
+        expand metadata
+    }
+    // Remove an unsupported metadata field as JSON, without rewriting source lines.
+    if (mc < 260300) {
+        doLast {
+            def descriptor = destinationDir.toPath().resolve('fabric.mod.json').toFile()
+            def json = new groovy.json.JsonSlurper().parse(descriptor)
+            json.remove('accessWidener')
+            descriptor.setText(groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json)), 'UTF-8')
+        }
+    }
+}
+
+publishing.publications.named('mavenJava') {
+    artifactId = 'clear-f3-fabric'
+    version = project.version.toString()
+}

@@ -1,0 +1,73 @@
+plugins {
+    id 'base'
+    id 'net.fabricmc.fabric-loom' version "${loom_version}" apply false
+    id 'net.fabricmc.fabric-loom-remap' version "${loom_version}" apply false
+    id 'net.neoforged.moddev' version "${moddev_version}" apply false
+}
+
+subprojects {
+    if (project.path == ':fabric') {
+        apply plugin: 'base'
+        return
+    }
+
+    apply plugin: 'java-library'
+    apply plugin: 'maven-publish'
+
+    group = rootProject.group
+    version = rootProject.version
+
+    base {
+        archivesName = "clear-f3-${project.name}"
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    java {
+        toolchain.languageVersion = JavaLanguageVersion.of(25)
+        withSourcesJar()
+    }
+
+    tasks.withType(JavaCompile).configureEach {
+        options.encoding = 'UTF-8'
+        options.release = 25
+    }
+
+    tasks.withType(Jar).configureEach {
+        from(rootProject.file('LICENSE')) {
+            rename { 'LICENSE_clear-f3' }
+        }
+    }
+
+    publishing {
+        publications {
+            mavenJava(MavenPublication) {
+                artifactId = "clear-f3-${project.name}"
+                from components.java
+            }
+        }
+    }
+}
+
+tasks.named('build') {
+    dependsOn subprojects.collect { "${it.path}:build" }
+}
+
+tasks.register('buildAndGather') {
+    group = 'build'
+    description = 'Build all modules and gather installable jars by loader.'
+    dependsOn tasks.named('build')
+}
+
+// A root task prevents an unqualified runClient from selecting every subproject.
+tasks.register('runClient') {
+    group = 'application'
+    description = 'Run the default Fabric client through the loader module.'
+    dependsOn ':fabric:runClient'
+}
+
+tasks.named('clean') {
+    dependsOn subprojects.collect { "${it.path}:clean" }
+}

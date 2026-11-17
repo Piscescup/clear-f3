@@ -1,0 +1,27 @@
+plugins {
+    id 'net.fabricmc.fabric-loom'
+}
+
+sourceSets.main.resources {
+    srcDir 'src/generated/resources'
+    exclude '.cache/**'
+}
+
+loom {
+    accessWidenerPath = file('src/main/resources/clear_f3.accesswidener')
+    // This module supplies shared sources only; launch through a loader module.
+    // Removing Loom's run configurations also disables their run tasks.
+    runs.clear()
+}
+
+repositories {
+    maven { url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${minecraft_version}"
+
+    // Only the Mixin APIs are needed; common has no loader entrypoint or runtime dependency.
+    compileOnly "net.fabricmc:sponge-mixin:${mixin_version}"
+    compileOnly "io.github.llamalad7:mixinextras-common:${mixinextras_version}"
+}

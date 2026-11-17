@@ -1,0 +1,40 @@
+{
+	"schemaVersion": 1,
+	"id": "clear_f3",
+	"version": "${version}",
+	"name": "Clear F3",
+	"description": "A grouped, readable debug overlay inspired by Minecraft 26.4.",
+	"authors": [
+		"Pisces Cup"
+	],
+	"contact": {
+		"homepage": "https://github.com/Piscescup"
+	},
+	"license": "Apache-2.0",
+	"icon": "assets/clear_f3/icon.png",
+	"environment": "client",
+	"accessWidener": "clear_f3.accesswidener",
+	"entrypoints": {
+		"client": [
+			"io.github.piscescup.fabricmc.clear_f3.ClearF3Fabric"
+		],
+		"fabric-datagen": [
+			"io.github.piscescup.fabricmc.clear_f3.ClearF3DataGenerator"
+		],
+		"modmenu": [
+			"io.github.piscescup.fabricmc.clear_f3.compat.modmenu.ClearF3ModMenu"
+		]
+	},
+	"mixins": [
+		"clear_f3.mixins.json"
+	],
+	"suggests": {
+		"modmenu": "*"
+	},
+	"depends": {
+		"fabricloader": ">=${loader_version}",
+		"minecraft": "${minecraft_dependency}",
+		"java": ">=${java_version}",
+		"fabric-api": "*"
+	}
+}

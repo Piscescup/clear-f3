@@ -1,0 +1,57 @@
+plugins {
+    id 'net.neoforged.moddev'
+}
+
+base.archivesName = "clean-f3-v${rootProject.version}-mc-${minecraft_version}-neoforge-${neoforge_version}"
+tasks.withType(Jar).configureEach {
+    archiveVersion = ''
+}
+
+// Recompile shared code against NeoForge's patched Minecraft classes.
+sourceSets.main {
+    java.srcDir rootProject.file('common/src/main/java')
+    resources.srcDir rootProject.file('common/src/main/resources')
+    resources.srcDir rootProject.file('common/src/generated/resources')
+    resources.exclude '.cache/**'
+}
+
+neoForge {
+    version = neoforge_version
+
+    runs {
+        client {
+            client()
+        }
+    }
+
+    mods {
+        clear_f3 {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+processResources {
+    def properties = [version: project.version.toString(),
+                      minecraft_version_range: minecraft_version_range,
+                      neoforge_version_range: neoforge_version_range]
+    inputs.properties properties
+
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand properties
+    }
+    filesMatching('clear_f3.mixins.json') {
+        expand java_compatibility: 'JAVA_25', debug_overlay_mixin: 'client.DebugScreenOverlayMixin'
+    }
+}
+
+tasks.register('buildAndGather', Sync) {
+    group = 'build'
+    description = 'Gather the installable NeoForge jar into the release directory.'
+    from(tasks.named('jar').flatMap { it.archiveFile })
+    into rootProject.layout.buildDirectory.dir('releases/neoforge')
+}
+
+tasks.named('build') {
+    dependsOn 'buildAndGather'
+}

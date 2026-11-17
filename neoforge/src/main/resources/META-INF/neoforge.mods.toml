@@ -1,0 +1,32 @@
+modLoader = "javafml"
+loaderVersion = "[12,)"
+license = "Apache-2.0"
+
+[[mods]]
+modId = "clear_f3"
+version = "${version}"
+displayName = "Clear F3"
+displayURL = "https://github.com/Piscescup"
+iconFile = "assets/clear_f3/icon.png"
+authors = "Pisces Cup"
+description = '''A grouped, readable debug overlay inspired by Minecraft 26.4.'''
+
+[[accessTransformers]]
+file = "META-INF/accesstransformer.cfg"
+
+[[mixins]]
+config = "clear_f3.mixins.json"
+
+[[dependencies.clear_f3]]
+modId = "neoforge"
+type = "required"
+versionRange = "${neoforge_version_range}"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.clear_f3]]
+modId = "minecraft"
+type = "required"
+versionRange = "${minecraft_version_range}"
+ordering = "NONE"
+side = "CLIENT"

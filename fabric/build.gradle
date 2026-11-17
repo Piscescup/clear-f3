@@ -1,0 +1,73 @@
+import groovy.json.JsonSlurper
+import com.replaymod.gradle.preprocess.RootPreprocessPlugin
+
+buildscript {
+    repositories {
+        maven {
+            url = 'https://maven.fallenbreath.me/jitpack'
+            content { includeGroupAndSubgroups 'com.github' }
+        }
+        maven { url = 'https://jitpack.io' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath "com.github.Fallen-Breath.preprocessor:preprocessor:${preprocessor_version}"
+
+
+    }
+}
+
+// This loader module owns the graph; its children are the Minecraft versions.
+apply plugin: RootPreprocessPlugin
+
+preprocess {
+    strictExtraMappings.set(false)
+    mainProjectFile.set('versions/mainProject')
+
+    def versions = new JsonSlurper().parse(file('versions.json')).versions
+    def nodes = versions.collectEntries { String version ->
+        def parts = version.tokenize('.').collect { it as int }
+        int mcVersion = parts[0] * 10000 + parts[1] * 100 + (parts.size() > 2 ? parts[2] : 0)
+        [(version): createNode(version, mcVersion, '')]
+    }
+    versions.collate(2, 1, false).each { pair ->
+        String older = pair[0]
+        String newer = pair[1]
+        nodes[newer].link(nodes[older], file("versions/mappings/${older}-${newer}.txt"))
+    }
+}
+
+// Version projects live below fabric/versions and share fabric/version.gradle.
+def versionPaths = childProjects.values().collect { it.path }
+
+tasks.register('buildAndGather', Sync) {
+    group = 'build'
+    description = 'Build every Fabric version and gather installable jars.'
+    dependsOn versionPaths.collect { "${it}:build" }
+    from(versionPaths.collect { project(it).layout.buildDirectory.dir('libs') }) {
+        include 'clean-f3-v*-mc-*-fabric-*.jar'
+        exclude '*-sources.jar', '*-dev.jar'
+    }
+    into rootProject.layout.buildDirectory.dir('releases/fabric')
+    duplicatesStrategy = DuplicatesStrategy.FAIL
+}
+
+tasks.named('build') {
+    dependsOn 'buildAndGather'
+}
+
+tasks.named('clean') {
+    dependsOn versionPaths.collect { "${it}:clean" }
+}
+
+tasks.register('runClient') {
+    group = 'fabric'
+    description = 'Run the current Minecraft 26.3 Fabric client.'
+    dependsOn ':fabric:26.3:runClient'
+}
+
+tasks.register('runDatagen') {
+    group = 'fabric'
+    description = 'Run data generation for the current Minecraft 26.3 target.'
+    dependsOn ':fabric:26.3:runDatagen'
+}
